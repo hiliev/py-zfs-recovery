@@ -36,7 +36,7 @@ class DVA:
 
     def __init__(self, qword0, qword1):
         self._asize_r = (qword0 & 0xffffff) << 9
-        self._asize = (1 + (qword0 & 0xffffff)) << 9
+        self._asize = (qword0 & 0xffffff) << 9
         self._grid = (qword0 >> 24) & 0xff
         self._vdev = (qword0 >> 32)
         self._offset = (qword1 & 0x7fffffffffffffff) << 9

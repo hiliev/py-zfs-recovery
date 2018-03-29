@@ -28,6 +28,8 @@
 
 
 from zfs.blockptr import BlockPtrArray
+from zfs.zio import dumppacket
+from zfs.dnode import BLKPTR_OFFSET
 import struct
 
 MZAP_ENT_LEN = 64
@@ -150,6 +152,10 @@ class FatZap:
         ]
         fmt = ' '.join(f+"={}" for f in fields)
         print("[+]  Fat Zap header:", fmt.format(*zpt))
+
+        if (zpt[3] == 0): # embedded zap
+            embedptrs= data[self._dbsize//2:self._dbsize];
+        
         block_size = self._dbsize
         nblocks = (len(data) - block_size) // block_size
         for n in range(1, nblocks+1):
@@ -226,13 +232,14 @@ def _choose_zap_factory(data, dbsize):
         return None
     zap.parse(data)
     return zap
-    
-def _simple_zap_factory(vdev, bptr, dbsize):
-    data = vdev.read_block(bptr)
-    if data is None:
-        return None
-    if bptr.lsize < len(data):
-        data = data[0:bptr.lsize]
+
+def _blockptrar_zap_factory(vdev, bpa, dbsize, nblocks):
+    data = bytearray()
+    for i in range(nblocks):
+        d = vdev.read_block(bpa[i])
+        if not (d is None):
+            dumppacket(d)
+            data += d
     return _choose_zap_factory(data, dbsize)
 
 def _indirect_zap_factory(vdev, bptr, dbsize, nblocks):
@@ -241,16 +248,15 @@ def _indirect_zap_factory(vdev, bptr, dbsize, nblocks):
         return None
     # Data contains first indirection block
     bpa = BlockPtrArray(data)
-    data = bytearray()
-    for i in range(nblocks):
-        data += vdev.read_block(bpa[i])
-    return _choose_zap_factory(data, dbsize)
-
+    return _blockptrar_zap_factory(vdev, bpa, dbsize, nblocks)
+    
 def zap_factory(vdev, dnode):
     bptr = dnode.blkptrs[0]
     dbsize = dnode.datablksize
     if dnode.levels == 1:
-        return _simple_zap_factory(vdev, bptr, dbsize)
+        nblocks = dnode._nblkptr
+        bpa = BlockPtrArray(dnode._data[BLKPTR_OFFSET:BLKPTR_OFFSET+nblocks*128])
+        return _blockptrar_zap_factory(vdev, bpa, dbsize, nblocks)
     elif dnode.levels == 2:
         return _indirect_zap_factory(vdev, bptr, dbsize, dnode.maxblkid+1)
     # TODO: Implement Fat Zap with BlockTree

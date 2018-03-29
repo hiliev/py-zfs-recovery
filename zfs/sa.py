@@ -41,5 +41,7 @@ class SystemAttr:
         self._sa_registry_id = sa_attrs_zap['REGISTRY']
         registry = dataset[self._sa_registry_id]
         layout = dataset[self._sa_layout_id]
+        print("[+] SA registry: %s" %(str(registry)))
+        print("[+] SA layout  : %s" %(str(layout)))
         self._r_zap = zap_factory(vdev, registry)
         self._l_zap = zap_factory(vdev, layout)
