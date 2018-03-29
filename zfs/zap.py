@@ -215,30 +215,7 @@ class FatZap:
     def __getitem__(self, item):
         return self._entries.get(item)
 
-
-def _simple_zap_factory(vdev, bptr):
-    data = vdev.read_block(bptr)
-    if data is None:
-        return None
-    (block_type,) = struct.unpack("=Q", data[:8])
-    # Single-block ZAPs are not supposed to be fat?
-    if block_type != ZBT_MICRO:
-        print("[-]  Single-block ZAP - expected a Micro Zap, got", hex(block_type))
-        return None
-    zap = MicroZap()
-    zap.parse(data)
-    return zap
-
-
-def _indirect_zap_factory(vdev, bptr, dbsize, nblocks):
-    data = vdev.read_block(bptr)
-    if data is None:
-        return None
-    # Data contains first indirection block
-    bpa = BlockPtrArray(data)
-    data = bytearray()
-    for i in range(nblocks):
-        data += vdev.read_block(bpa[i])
+def _choose_zap_factory(data, dbsize):
     (block_type,) = struct.unpack("=Q", data[:8])
     if block_type == ZBT_MICRO:
         zap = MicroZap()
@@ -249,14 +226,32 @@ def _indirect_zap_factory(vdev, bptr, dbsize, nblocks):
         return None
     zap.parse(data)
     return zap
+    
+def _simple_zap_factory(vdev, bptr, dbsize):
+    data = vdev.read_block(bptr)
+    if data is None:
+        return None
+    if bptr.lsize < len(data):
+        data = data[0:bptr.lsize]
+    return _choose_zap_factory(data, dbsize)
 
+def _indirect_zap_factory(vdev, bptr, dbsize, nblocks):
+    data = vdev.read_block(bptr)
+    if data is None:
+        return None
+    # Data contains first indirection block
+    bpa = BlockPtrArray(data)
+    data = bytearray()
+    for i in range(nblocks):
+        data += vdev.read_block(bpa[i])
+    return _choose_zap_factory(data, dbsize)
 
 def zap_factory(vdev, dnode):
     bptr = dnode.blkptrs[0]
+    dbsize = dnode.datablksize
     if dnode.levels == 1:
-        return _simple_zap_factory(vdev, bptr)
+        return _simple_zap_factory(vdev, bptr, dbsize)
     elif dnode.levels == 2:
-        dbsize = dnode.datablksize
         return _indirect_zap_factory(vdev, bptr, dbsize, dnode.maxblkid+1)
     # TODO: Implement Fat Zap with BlockTree
     raise NotImplementedError("Deeper ZAPs not supported yet")
