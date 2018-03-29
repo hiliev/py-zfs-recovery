@@ -38,14 +38,15 @@ from zfs.zio import RaidzDevice             # or MirrorDevice
 from os import path
 
 BLK_PROXY_ADDR = ("localhost", 24892)       # network block server
-# BLK_PROXY_ADDR = ("files:", "disks.tab")  # local device nodes
+BLK_PROXY_ADDR = ("files:", "disks.tab")  # local device nodes
 
 BLK_INITIAL_DISK = "/dev/dsk/c3t0d0s7"      # device to read the label from
+BLK_INITIAL_DISK = "/dev/loop0"      # device to read the label from
 TXG = -1                                    # select specific transaction or -1 for the active one
 
 TEMP_DIR = "/tmp"
 OUTPUT_DIR = "rescued"
-DS_TO_ARCHIVE = []
+DS_TO_ARCHIVE = [54]
 DS_OBJECTS = []                             # objects to export
 DS_OBJECTS_SKIP = []                        # objects to skip
 DS_SKIP_TRAVERSE = []                       # datasets to skip while exporting file lists
