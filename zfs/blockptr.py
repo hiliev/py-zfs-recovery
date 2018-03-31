@@ -98,6 +98,7 @@ class BlockPtr:
         self._E = qwords[6] >> 63
         self._birth_txg = qwords[10]
         self._fill_count = qwords[11]
+        self._checksum = qwords[12:16]
         if self._embeded:
             self._dva0 = self._dva0 = DVA(0, 0)
             self._dva1 = self._dva0 = DVA(0, 0)
@@ -181,3 +182,21 @@ class BlockPtrArray:
 
     def __getitem__(self, item):
         return self._bptrs[item]
+
+def fletcher4(data):
+    l = len(data)
+    e = ( 4 - (l % 4) ) % 4;
+    if (e > 0):
+        data = data + ([0]*e);
+        l += e
+    a = 0
+    b = 0
+    c = 0
+    d = 0
+    for i in range(l//4):
+        v, = struct.unpack("<I",data[i*4:(i+1)*4])
+        a += v
+        b += a
+        c += b
+        d += c
+    return (a&0xffffffffffffffff,b&0xffffffffffffffff,c&0xffffffffffffffff,d&0xffffffffffffffff)
