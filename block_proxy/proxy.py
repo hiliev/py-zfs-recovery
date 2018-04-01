@@ -69,27 +69,70 @@ class BlockProxy:
             return self._readv_network(blockv)
 
     def _read_network(self, dev_path, offset, count):
-        request_header = struct.pack('=BQQ', 1, offset, count)
-        request = request_header + dev_path.encode('utf8')
-
+        buf = bytearray(count)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
         try:
             sock.connect((self.host, self.port))
+            request = struct.pack('=BB', ord('r'), 1)
             sock.sendall(request)
-
-            buf = bytearray(count)
-            view = memoryview(buf)
-            while count:
-                nbytes = sock.recv_into(view, count)
-                view = view[nbytes:]
-                count -= nbytes
-
-            # print("[+] BlockProxy: received {} bytes".format(len(buf)))
-            return buf
+            self._read_network_buf(sock, buf, 0, dev_path, offset, count)
         finally:
             sock.close()
+        return buf
+        
+    def _readv_network(self, blockv):
+        
+        count = 0
+        for block in blockv:
+            count += block[2]
+        buf = bytearray(count)
+        
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            sock.connect((self.host, self.port))
+            request = struct.pack('=BB', ord('v'), len(blockv))
+            sock.sendall(request)
+            boff = 0;
+            for block in blockv:
+                self._read_network_buf(sock, buf, boff, block[0], block[1], block[2])
+                boff += block[2]
+        finally:
+            sock.close()
+        return buf
 
+    def _read_network_buf(self, sock, buf, boff, dev_path, offset, count):
+
+        enc_name = dev_path.encode('utf8')
+        request = struct.pack('=QQB', offset, count, len(enc_name)) + enc_name;
+        sock.sendall(request)
+        
+        view = memoryview(buf)
+        while True:
+            answer = bytearray()
+            while len(answer) < 17:
+                answer += sock.recv(1)
+            a, off, l = struct.unpack('=BQQ', answer)
+            if a == ord('n'):
+                print("[>] 'n' received");
+                if (count <= 0):
+                    break;
+                count -= l;
+                while l > 0:
+                    nbytes = sock.recv_into(view[boff+(off-offset):], l)
+                    off += nbytes
+                    l -= nbytes
+            elif a == ord('e'):
+                print("[>] 'e' received");
+                break;
+            elif a == ord('l'):
+                print("[>] 'l' received");
+                break;
+            else:
+                print("Unknown code '%d'" %(a))
+                break
+            
+        # print("[+] BlockProxy: received {} bytes".format(len(buf)))
+        
     def _read_files(self, dev_path, offset, count):
         if dev_path not in self._device_files:
             trans_path = dev_path
@@ -100,33 +143,6 @@ class BlockProxy:
         f.seek(offset)
         data = f.read(count)
         return data
-
-    def _readv_network(self, blockv):
-        request = struct.pack('=BB', 2, len(blockv))
-        count = 0
-        for block in blockv:
-            enc_name = block[0].encode('utf8')
-            subreq = struct.pack('=QQB', block[1], block[2], len(enc_name))
-            request += subreq + enc_name
-            count += block[2]
-
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-        try:
-            sock.connect((self.host, self.port))
-            sock.sendall(request)
-
-            buf = bytearray(count)
-            view = memoryview(buf)
-            while count:
-                nbytes = sock.recv_into(view, count)
-                view = view[nbytes:]
-                count -= nbytes
-
-            # print("[+] BlockProxy: received {} bytes".format(len(buf)))
-            return buf
-        finally:
-            sock.close()
 
     def _readv_files(self, blockv):
         data = bytearray()
