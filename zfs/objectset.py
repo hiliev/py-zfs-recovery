@@ -79,7 +79,7 @@ class ObjectSet:
 
     def _load_os_dnode(self, os_bptr, dva):
         print("[+] Loading object set dnode from", os_bptr)
-        return DNode.from_bptr(self._vdev, os_bptr, dvas=(dva,))
+        return DNode.from_bptr(self._vdev, os_bptr, dvas=(dva,), objset=self)
 
     def __getitem__(self, item):
         return self._get_dnode(item)
